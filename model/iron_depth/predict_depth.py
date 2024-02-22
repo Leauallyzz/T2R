@@ -108,6 +108,7 @@ def predict_iron_depth(image, K=None, device="cuda:0", model=None, n_net=None, i
 
     # surface normal prediction
     norm_out = n_net(img)
+    # 保留前 3 个元素
     pred_norm = norm_out[:, :3, :, :]
     pred_kappa = norm_out[:, 3:, :, :]
     alpha, alpha_deg = utils.kappa_to_alpha_torch(pred_kappa.permute(0, 2, 3, 1)[0, :, :, 0])
@@ -120,6 +121,7 @@ def predict_iron_depth(image, K=None, device="cuda:0", model=None, n_net=None, i
     }
 
     if input_depth is not None:
+        # 它会在第 0 个维度上增加一个大小为 1 的维度，形状变为 (1, height, width)。然后再次使用 unsqueeze(0) 函数，会在第 0 个维度上再增加一个大小为 1 的维度，形状变为 (1, 1, height, width)。
         input_dict['input_depth'] = input_depth.unsqueeze(0).unsqueeze(0)
         input_dict['input_mask'] = input_mask.unsqueeze(0).unsqueeze(0)
         input_dict['fix_input_depth'] = fix_input_depth

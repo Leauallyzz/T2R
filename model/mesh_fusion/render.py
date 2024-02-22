@@ -52,7 +52,7 @@ def save_world_space_mesh(image, depth, fov_in_degrees, world_to_cam, target_pat
     vertices, faces, colors = features_to_world_space_mesh(image, depth, fov_in_degrees, world_to_cam)
     save_mesh(vertices, faces, colors, target_path)
 
-
+# 对 3D 网格进行清理，以提高网格质量和减少可能的渲染错误。
 def clean_mesh(vertices: torch.Tensor, faces: torch.Tensor, colors: torch.Tensor, edge_threshold: float = 0.1, min_triangles_connected: int = -1, fill_holes: bool = True) -> (torch.Tensor, torch.Tensor, torch.Tensor):
     """
     Performs the following steps to clean the mesh:
@@ -283,7 +283,7 @@ def remesh_poisson(vertices, colors, faces=None, max_faces_for_poisson=4_000_000
 
     return vertices, faces, colors
 
-
+# 负责将图像特征（颜色和深度）投影到世界空间的 3D 网格中。
 def features_to_world_space_mesh(colors, depth, fov_in_degrees, world_to_cam, mask=None, edge_threshold=-1, surface_normal_threshold=-1, pix_to_face=None, faces=None, vertices=None):
     """
     project features to mesh in world space and return (vertices, faces, colors) result by applying simple triangulation from image-structure.
@@ -461,6 +461,9 @@ class VertexColorShader(ShaderBase):
         super().__init__(**kwargs)
         self.blend_soft = blend_soft
 
+    # **：在函数参数中，** 符号用于表示关键字参数的字典。在这个例子中，**kwargs 表示接受任意数量的关键字参数，并将它们存储在名为 kwargs 的字典中。
+    # 这允许您在调用 forward 方法时传递额外的参数，例如 blend_params，而不需要显式地将它们作为函数参数定义。
+    # ->：在函数定义中，-> 符号用于表示函数返回值的类型。
     def forward(self, fragments, meshes, **kwargs) -> torch.Tensor:
         blend_params = kwargs.get("blend_params", self.blend_params)
         texels = meshes.sample_textures(fragments)

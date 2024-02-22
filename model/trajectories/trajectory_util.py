@@ -60,11 +60,12 @@ def _trans_z(x):
     '''
     return np.array([0, 0, x], dtype=np.float32)
 
-
+# 辅助函数，它接受一个函数 fn 和一组关键字参数 **kwargs，并返回一个新的函数，该函数将 fn 和 **kwargs 一起应用于输入的迭代次数 i 和总迭代次数 steps。
+# 这样，您可以轻松地为 _circle、_rot_left、_back_and_forth 等函数提供预定义的参数，以生成特定类型的相机运动。
 def _config_fn(fn, **kwargs):
     return lambda i, steps: fn(i, steps, **kwargs)
 
-
+# 生成特定类型的相机运动（如圆周运动、左右旋转、前后运动等）
 def _circle(i, steps=60, txmax=0, txmin=0, tymax=0, tymin=0, tzmax=0, tzmin=0, rxmax=0, rxmin=0, rymax=0, rymin=0, rzmax=0, rzmin=0):
     tx_delta = (txmax - txmin) / (steps // 2)
     ty_delta = (tymax - tymin) / (steps // 2)
@@ -99,6 +100,7 @@ def _circle(i, steps=60, txmax=0, txmin=0, tymax=0, tymin=0, tzmax=0, tzmin=0, r
         R += _rot_x(-rx)
         R += _rot_z(-rz)
 
+    # 将平移和旋转合成一个外参矩阵
     return get_extrinsics(R, T)
 
 
@@ -149,7 +151,7 @@ def _back_and_forth(i, steps=20, txmax=0, txmin=0, tymax=0, tymin=0, tzmax=0, tz
 
     return get_extrinsics(R, T)
 
-
+# lambda 是 Python 中的一个关键字，用于创建简短的匿名函数。
 trans_t = lambda t: torch.Tensor([
     [1, 0, 0, 0],
     [0, 1, 0, 0],
@@ -168,13 +170,17 @@ rot_theta = lambda th: torch.Tensor([
     [np.sin(th), 0, np.cos(th), 0],
     [0, 0, 0, 1]]).float()
 
-
+# 函数用于生成一个表示相机位姿（位置和朝向）的矩阵，其参数基于球面坐标系
 def pose_spherical(theta, phi, radius):
+    # 相机沿 z 轴移动 radius 的距离
     c2w = trans_t(radius)
+    # rot_phi 和 rot_theta 函数，分别对相机进行绕 x 轴和 y 轴的旋转。
     c2w = rot_phi(phi / 180. * np.pi) @ c2w
     c2w = rot_theta(theta / 180. * np.pi) @ c2w
     # c2w = torch.Tensor(np.array([[-1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]])) @ c2w
     c2w[0:3, 3] = -1 * c2w[0:3, 3]
+
+    # c2w 是一个 4x4 的矩阵，表示从相机坐标系（Camera）到世界坐标系（World）的变换。
     return c2w
 
 
@@ -187,7 +193,7 @@ def pose_spherical(theta, phi, radius):
 #     c2w = sample_points_on_unit_sphere(n_sample, radius, height)
 #     return torch.inverse(c2w)
 
-
+# i为迭代次数，setp为总迭代次数
 def _sphere_rot_xz(i, steps, radius=4.0, height=0.0, phi=20.0):
     rot_angle = i * 360 / steps
     rot_angle = rot_angle
@@ -201,9 +207,11 @@ def _double_sphere_rot_xz(i, steps, radius=4.0, height=0.0, phi=20.0):
     rot_angle = rot_angle
     phi = phi if height > 0 else -phi if height < 0 else 0
     c2w = pose_spherical(rot_angle, phi, radius)
+    # 对于偶数迭代次数（i % 2 == 0），将相机位姿矩阵的平移分量设置为 0
     if i % 2 == 0:
         c2w[0:3, 3] = 0
     else:
+        # 对于奇数迭代次数，将相机位姿矩阵的 y 轴平移分量设置为 height
         c2w[1, 3] = height
     return torch.inverse(c2w)
 

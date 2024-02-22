@@ -35,9 +35,11 @@ def visualize_depth_numpy(depth, minmax=None, cmap=cv2.COLORMAP_TURBO):
 
 def load_sd_inpaint(args):
     model_path = os.path.join(args.models_path, "stable-diffusion-2-inpainting")
+
     if not os.path.exists(model_path):
         model_path = "stabilityai/stable-diffusion-2-inpainting"
     pipe = StableDiffusionInpaintPipeline.from_pretrained(model_path, torch_dtype=torch.float16).to(args.device)
+    # 加入controlnet的控制
 
     pipe.set_progress_bar_config(**{
         "leave": False,

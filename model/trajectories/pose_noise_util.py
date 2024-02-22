@@ -1,7 +1,17 @@
 import torch
 import numpy as np
 
+# 这段代码包含了一组函数，用于处理 3D 场景中的摄像机位姿。主要目的是在给定的位姿上添加噪声，模拟真实世界中可能存在的位姿不确定性。下面是对每个函数的简要说明：
 
+#     sample_noise：生成旋转和平移噪声。
+#     interpolate_noise：在给定的噪声序列之间插值。
+#     to_degrees 和 to_radians：将角度与弧度进行相互转换。
+#     isRotationMatrix：检查给定的矩阵是否为有效的旋转矩阵。
+#     rotationMatrixToEulerAngles：将旋转矩阵转换为欧拉角。
+#     eulerAnglesToRotationMatrix：将欧拉角转换为旋转矩阵。
+#     apply_noise：将生成的噪声应用于给定的位姿序列。
+
+# 主要函数是 apply_noise，它接收一组摄像机位姿（poses）和其他参数，然后在这些位姿上添加旋转和平移噪声。这些噪声是通过 sample_noise 函数生成并通过 interpolate_noise 函数插值的。apply_noise 函数的输出是一组添加了噪声的摄像机位姿。
 def sample_noise(n, r_max, t_max):
     nr = np.random.normal(0, scale=r_max/2.0, size=(n,3))
     nr = np.clip(nr, a_min=-r_max, a_max=r_max)

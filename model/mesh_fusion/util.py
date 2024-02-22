@@ -22,7 +22,7 @@ def get_pixel_grids(height, width, reverse=False):
     indices_grid = torch.stack([x_coordinates,  y_coordinates, ones], dim=0)
     return indices_grid
 
-
+# 函数返回的 pts 张量的形状为 (3, height * width)，其中每一列包含一个三维点的 x、y 和 z 坐标。
 def img_to_pts(height, width, depth, K=torch.eye(3)):
     pts = get_pixel_grids(height, width).to(depth.device)
     depth = depth.contiguous().view(1, -1)
@@ -88,7 +88,7 @@ def get_pinhole_intrinsics_from_fov(H, W, fov_in_degrees=55.0):
 
     return k_ref
 
-
+# 用于获取相机的内参矩阵。内参矩阵描述了相机的内部属性，如焦距和主点坐标。
 def get_intrinsics(img, fov_in_degrees=55.0):
     C, H, W = img.shape
     if C != 3:
@@ -99,7 +99,7 @@ def get_intrinsics(img, fov_in_degrees=55.0):
 
     return k_ref
 
-
+# 用于获取相机的外参矩阵。外参矩阵描述了相机在世界坐标系中的位置和方向。
 def get_extrinsics(rot_xyz, trans_xyz, device="cpu"):
     T = torch.tensor(trans_xyz)
     R = euler_angles_to_matrix(torch.tensor(rot_xyz), "XYZ")

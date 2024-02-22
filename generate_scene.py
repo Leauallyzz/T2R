@@ -20,6 +20,7 @@ def main(args):
         args.prompt = trajectories[0]["prompt"]
 
     # get first image from text prompt or saved image folder
+    # 这段代码用于获取第一张图像，它可以是根据文本提示生成的图像，也可以是从保存的图像文件夹中读取的图像。
     if (not args.input_image_path) or (not os.path.isfile(args.input_image_path)):
         first_image_pil = generate_first_image(args)
     else:
@@ -30,6 +31,7 @@ def main(args):
 
     # generate using all trajectories
     offset = 1  # have the start image already
+    # 使用所有轨迹生成图像：对于每个预定义的轨迹，将其设置为当前轨迹，并调用 pipeline.generate_images() 方法生成相应的图像序列。offset 变量用于记录当前生成的图像数量
     for t in trajectories:
         pipeline.set_trajectory(t)
         offset = pipeline.generate_images(offset=offset)
@@ -37,9 +39,13 @@ def main(args):
     # save outputs before completion
     pipeline.clean_mesh()
     intermediate_mesh_path = pipeline.save_mesh("after_generation.ply")
+    
+    # 用于从一组点云数据和法向量生成平滑的 3D 网格。
     save_poisson_mesh(intermediate_mesh_path, depth=args.poisson_depth, max_faces=args.max_faces_for_poisson)
 
+    # -------------------------------------------------------------------
     # run completion
+    # 对生成的场景进行补全，以填充可能的空洞和不完整区域。
     pipeline.args.update_mask_after_improvement = True
     pipeline.complete_mesh(offset=offset)
     pipeline.clean_mesh()

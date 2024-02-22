@@ -100,10 +100,12 @@ class Text2RoomPipeline(torch.nn.Module):
         # add to seen poses
         self.seen_poses.append(self.world_to_cam)
 
+# 加载深度模型
     def setup_models(self):
         # construct inpainting stable diffusion pipeline
         self.inpaint_pipe = load_sd_inpaint(self.args)
 
+        # 可以不用
         # construct depth model
         self.iron_depth_n_net, self.iron_depth_model = load_iron_depth_model(self.args.iron_depth_type, self.args.iron_depth_iters, self.args.models_path, self.args.device)
 
@@ -165,6 +167,7 @@ class Text2RoomPipeline(torch.nn.Module):
             "frames": []
         }
 
+    # 保存和加载 3D 场景中的摄像机位姿
     def save_poses(self, pose_file_path, poses=None):
         if poses is None:
             poses = self.seen_poses
@@ -174,10 +177,17 @@ class Text2RoomPipeline(torch.nn.Module):
 
     def load_poses(self, pose_file_path, convert_from_nerf=False, replace_existing=True):
         with open(pose_file_path, "r") as f:
+
             poses = json.load(f)
+
+            # 如果 'frames' 存在，从位姿字典中提取 'frames' 键对应的值，将其作为新的位姿列表。
+            # 遍历新的位姿列表，将每个位姿（p）的 'transform_matrix' 键对应的值转换为 NumPy 数组，然后转换为 PyTorch 张量。最后，将张量转移到 self.args.device（可能是 CPU 或 GPU）并将其数据类型转换为 float。
             if 'frames' in poses:
                 poses = poses['frames']
                 poses = [torch.from_numpy(np.array(p['transform_matrix'])).to(self.args.device).float() for p in poses]
+
+            # 如果 'frames' 不存在，遍历位姿字典的键值对（i 和 p）。i 是位姿的索引，p 是位姿矩阵。
+            # 将每个位姿矩阵 p 转换为 NumPy 数组，然后转换为 PyTorch 张量。最后，将张量转移到 self.args.device（可能是 CPU 或 GPU）并将其数据类型转换为 float。
             else:
                 poses = [torch.from_numpy(np.array(p)).to(self.args.device).float() for i, p in poses.items()]
 
@@ -228,8 +238,13 @@ class Text2RoomPipeline(torch.nn.Module):
         save_animation(self.args.rgb_path, prefix=prefix)
         save_animation(self.args.rgbd_path, prefix=prefix)
 
+    # 深度信息在这里预测，我不用预测！！！！
     def predict_depth(self):
         # use the IronDepth method to predict depth: https://github.com/baegwangbin/IronDepth
+
+        # 在这里他根据生成的图像去预测深度
+        # 我想的是我怎么根据已有的已知深度去生成图像
+
         predicted_depth, _ = predict_iron_depth(
             image=self.current_image_pil,
             K=self.K,
@@ -241,8 +256,10 @@ class Text2RoomPipeline(torch.nn.Module):
             fix_input_depth=True
         )
 
+        
         return predicted_depth
 
+    # 将渲染深度与真实深度进行对齐，然后将预测的深度与真实深度进行融合
     def depth_alignment(self, predicted_depth):
         aligned_depth = depth_alignment.scale_shift_linear(
             rendered_depth=self.rendered_depth,
@@ -338,6 +355,7 @@ class Text2RoomPipeline(torch.nn.Module):
         )
 
         # mask rendered_image_tensor
+        # 使用修复遮罩对渲染后的图像进行遮罩处理。这样，在后续的图像修复步骤中，可以只关注遮罩区域内的空洞和遮挡部分。
         rendered_image_tensor = rendered_image_tensor * ~self.inpaint_mask
 
         # stable diffusion models want the mask and image as PIL images
@@ -436,15 +454,26 @@ class Text2RoomPipeline(torch.nn.Module):
         image_smooth = torch.where(dilated_edges, blur_gaussian, image)
         return image_smooth
 
+    # 涉及到深度预测
     def add_next_image(self, pos, offset, save_files=True, file_suffix=""):
         # predict & align depth of current image
+
+        # 我不需要预测，直接用真的
+
+        # ---------------------------------------------------------------------------------------------
         predicted_depth = self.predict_depth()
+
         predicted_depth = self.depth_alignment(predicted_depth)
         predicted_depth = self.apply_depth_smoothing(predicted_depth, self.inpaint_mask)
+
         self.predicted_depth = predicted_depth
 
         rendered_depth_pil = Image.fromarray(visualize_depth_numpy(self.rendered_depth.cpu().numpy())[0].astype(np.uint8))
         depth_pil = Image.fromarray(visualize_depth_numpy(predicted_depth.cpu().numpy())[0].astype(np.uint8))
+
+        # ---------------------------------------------------------------------------------------------
+
+        # 保存渲染的深度、预测的深度和 RGBD 图像
         if save_files:
             save_image(rendered_depth_pil, f"rendered_depth{file_suffix}", offset + pos, self.args.depth_path)
             save_image(depth_pil, f"depth{file_suffix}", offset + pos, self.args.depth_path)
@@ -468,6 +497,7 @@ class Text2RoomPipeline(torch.nn.Module):
 
     def project_and_inpaint(self, pos=0, offset=0, save_files=True, file_suffix="", inpainted_image_pil=None):
         # project to next pose
+        # 调用 self.project() 方法渲染 3D 场景中的对象，并返回渲染后的图像（rendered_image_pil）和修复遮罩（inpaint_mask_pil）
         _, rendered_image_pil, inpaint_mask_pil = self.project()
         if "adaptive" in self.trajectory_dict:
             def update_pose(reverse=False):
@@ -503,6 +533,8 @@ class Text2RoomPipeline(torch.nn.Module):
                     break
 
         # inpaint projection result
+        # 用SD进行修复
+        # 对渲染后的图像进行修复：使用 self.inpaint() 方法填充渲染图像中的空洞或遮挡区域，并返回修复后的图像（inpainted_image_pil）和修复遮罩（eroded_dilated_inpaint_mask_pil）
         if inpainted_image_pil is None:
             inpainted_image_pil, eroded_dilated_inpaint_mask_pil = self.inpaint(rendered_image_pil, inpaint_mask_pil)
             if save_files:
@@ -544,10 +576,12 @@ class Text2RoomPipeline(torch.nn.Module):
 
     def forward(self, pos=0, offset=0, save_files=True):
         # get next pose
+        # 获取当前相机位置对应的相机位姿（world_to_cam 矩阵）。将这个位姿添加到已看到的相机位姿列表（self.seen_poses）中。
         self.world_to_cam = self.get_next_pose_in_trajectory(pos)
         self.seen_poses.append(self.world_to_cam.clone())
 
         # render --> inpaint --> add to 3D structure
+        # 渲染 3D 场景中的对象，修复可能的空洞或遮挡区域，并将修复后的图像添加到 3D 结构中。
         self.project_and_inpaint(pos, offset, save_files)
 
         if self.args.clean_mesh_every_nth > 0 and (pos + offset) % self.args.clean_mesh_every_nth == 0:
@@ -594,9 +628,12 @@ class Text2RoomPipeline(torch.nn.Module):
 
     def generate_images(self, offset=0):
         # generate images with forward-warping
+        # 使用 tqdm 进度条显示图像生成的进度。tqdm 是一个 Python 库，用于显示循环的进度。
         pbar = tqdm(range(self.args.n_images))
         for pos in pbar:
             pbar.set_description(f"Image [{pos}/{self.args.n_images - 1}]")
+
+            # self.forward() 方法根据给定的相机位置和偏移量来渲染 3D 场景中的对象。
             self.forward(pos, offset)
 
         # reset gpu memory
